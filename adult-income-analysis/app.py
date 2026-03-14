@@ -1,12 +1,12 @@
 # ============================================================================
-# APP.PY - GIAO DIỆN STREAMLIT (PROFESSIONAL DESIGN)
+# APP.PY - GIAO DIỆN STREAMLIT (DARK MODE - FIXED)
 # ============================================================================
 
 import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.express as px
 import plotly.graph_objects as go
+from scipy import stats
 from analyzer import IncomeAnalyzer
 import warnings
 warnings.filterwarnings('ignore')
@@ -22,48 +22,36 @@ st.set_page_config(
 )
 
 # ============================================================================
-# CUSTOM CSS - TỐI ƯU GIAO DIỆN
+# CUSTOM CSS - DARK MODE OPTIMIZED
 # ============================================================================
 st.markdown("""
 <style>
-    /* Giảm padding giữa các section */
     .block-container {
         padding-top: 2rem;
         padding-bottom: 2rem;
     }
-    
-    /* Style cho metric cards */
     div[data-testid="stMetricValue"] {
         font-size: 1.5rem;
         font-weight: 600;
     }
-    
     div[data-testid="stMetricLabel"] {
         font-size: 0.9rem;
-        color: #666;
+        color: #9ca3af;
     }
-    
-    /* Style cho headers */
     h1, h2, h3 {
         font-weight: 600;
-        color: #1f2937;
+        color: #f3f4f6;
     }
-    
-    /* Style cho dataframes */
     div[data-testid="stDataFrame"] {
-        border: 1px solid #e5e7eb;
+        border: 1px solid #374151;
         border-radius: 8px;
     }
-    
-    /* Style cho expander */
     .streamlit-expanderHeader {
-        background-color: #f9fafb;
-        border: 1px solid #e5e7eb;
+        background-color: #1f2937;
+        border: 1px solid #374151;
         border-radius: 6px;
     }
-    
-    /* Style cho success/warning boxes */
-    .stSuccess, .stWarning, .stInfo, .stError {
+    .stAlert {
         border-radius: 6px;
     }
 </style>
@@ -76,8 +64,262 @@ if 'analyzer' not in st.session_state:
     st.session_state.analyzer = IncomeAnalyzer()
 if 'analysis_done' not in st.session_state:
     st.session_state.analysis_done = False
+if 'data_loaded' not in st.session_state:
+    st.session_state.data_loaded = False
 
 analyzer = st.session_state.analyzer
+
+# ============================================================================
+# HELPER: VẼ BIỂU ĐỒ PHÂN PHỐI CHUẨN (DARK MODE)
+# ============================================================================
+def plot_normal_distribution(z_stat: float, p_value: float, test_type: str = 'one-tailed') -> go.Figure:
+    """Vẽ biểu đồ phân phối chuẩn - Dark mode optimized"""
+    x = np.linspace(-4, 4, 1000)
+    y = stats.norm.pdf(x, 0, 1)
+    
+    fig = go.Figure()
+    
+    # Đường cong phân phối chuẩn - màu sáng cho dark mode
+    fig.add_trace(go.Scatter(
+        x=x, y=y,
+        mode='lines',
+        name='Phân phối chuẩn N(0,1)',
+        line=dict(color='#9ca3af', width=2)
+    ))
+    
+    if test_type == 'one-tailed':
+        x_fill = np.linspace(z_stat, 4, 100)
+        y_fill = stats.norm.pdf(x_fill, 0, 1)
+        
+        fig.add_trace(go.Scatter(
+            x=np.concatenate([x_fill, x_fill[::-1]]),
+            y=np.concatenate([y_fill, np.zeros_like(y_fill)]),
+            fill='toself',
+            fillcolor='rgba(239, 68, 68, 0.4)',
+            line=dict(color='rgba(239, 68, 68, 0)'),
+            name=f'P-value',
+            showlegend=True
+        ))
+        
+        # Z-statistic line - màu sáng
+        fig.add_vline(x=z_stat, line_dash='dash', line_color='#ef4444', line_width=2,
+                     annotation_text=f'Z = {z_stat:.2f}', annotation_position='top',
+                     annotation_font_color='#f3f4f6')
+        
+        z_critical = stats.norm.ppf(0.95)
+        fig.add_vline(x=z_critical, line_dash='dot', line_color='#3b82f6', line_width=2,
+                     annotation_text=f'Critical Z = {z_critical:.2f}', annotation_position='top',
+                     annotation_font_color='#f3f4f6')
+    else:
+        x_fill_right = np.linspace(abs(z_stat), 4, 100)
+        y_fill_right = stats.norm.pdf(x_fill_right, 0, 1)
+        x_fill_left = np.linspace(-4, -abs(z_stat), 100)
+        y_fill_left = stats.norm.pdf(x_fill_left, 0, 1)
+        
+        fig.add_trace(go.Scatter(
+            x=np.concatenate([x_fill_right, x_fill_right[::-1]]),
+            y=np.concatenate([y_fill_right, np.zeros_like(y_fill_right)]),
+            fill='toself',
+            fillcolor='rgba(239, 68, 68, 0.4)',
+            line=dict(color='rgba(239, 68, 68, 0)'),
+            name=f'P-value',
+            showlegend=True
+        ))
+        fig.add_trace(go.Scatter(
+            x=np.concatenate([x_fill_left, x_fill_left[::-1]]),
+            y=np.concatenate([y_fill_left, np.zeros_like(y_fill_left)]),
+            fill='toself',
+            fillcolor='rgba(239, 68, 68, 0.4)',
+            line=dict(color='rgba(239, 68, 68, 0)'),
+            showlegend=False
+        ))
+    
+    fig.update_layout(
+        title='Phân Phối Chuẩn và Vị Trí Z-Statistic',
+        title_font_color='#f3f4f6',
+        xaxis_title='Giá trị Z',
+        yaxis_title='Mật độ xác suất',
+        height=500,
+        showlegend=True,
+        hovermode='x unified',
+        plot_bgcolor='#111827',
+        paper_bgcolor='#111827',
+        font_color='#f3f4f6',
+        xaxis=dict(gridcolor='#374151', zerolinecolor='#6b7280'),
+        yaxis=dict(gridcolor='#374151', zerolinecolor='#6b7280')
+    )
+    
+    fig.add_annotation(
+        x=0, y=0.35,
+        text=f"Z = {z_stat:.2f}<br>P = {analyzer.format_p_value(p_value)}",
+        showarrow=True,
+        arrowhead=2,
+        arrowsize=1,
+        arrowwidth=2,
+        arrowcolor='#ef4444',
+        bgcolor='#1f2937',
+        bordercolor='#ef4444',
+        borderwidth=1,
+        font_color='#f3f4f6'
+    )
+    
+    return fig
+
+
+# ============================================================================
+# HELPER: VẼ BIỂU ĐỒ VÙNG BÁC BỎ (DARK MODE)
+# ============================================================================
+def plot_critical_region(z_stat: float, alpha: float = 0.05, test_type: str = 'one-tailed') -> go.Figure:
+    """Vẽ biểu đồ vùng bác bỏ - Dark mode optimized"""
+    x = np.linspace(-4, 4, 1000)
+    y = stats.norm.pdf(x, 0, 1)
+    
+    fig = go.Figure()
+    
+    fig.add_trace(go.Scatter(
+        x=x, y=y,
+        mode='lines',
+        name='Phân phối H₀',
+        line=dict(color='#9ca3af', width=2),
+        showlegend=True
+    ))
+    
+    if test_type == 'one-tailed':
+        z_critical = stats.norm.ppf(1 - alpha)
+        
+        # Vùng bác bỏ - màu đỏ sáng
+        x_reject = np.linspace(z_critical, 4, 100)
+        y_reject = stats.norm.pdf(x_reject, 0, 1)
+        
+        fig.add_trace(go.Scatter(
+            x=np.concatenate([x_reject, x_reject[::-1]]),
+            y=np.concatenate([y_reject, np.zeros_like(y_reject)]),
+            fill='toself',
+            fillcolor='rgba(239, 68, 68, 0.5)',
+            line=dict(color='rgba(239, 68, 68, 0)'),
+            name='Vùng bác bỏ H₀',
+            showlegend=True
+        ))
+        
+        # Vùng không bác bỏ - màu xanh sáng
+        x_accept = np.linspace(-4, z_critical, 100)
+        y_accept = stats.norm.pdf(x_accept, 0, 1)
+        
+        fig.add_trace(go.Scatter(
+            x=np.concatenate([x_accept, x_accept[::-1]]),
+            y=np.concatenate([y_accept, np.zeros_like(y_accept)]),
+            fill='toself',
+            fillcolor='rgba(59, 130, 246, 0.2)',
+            line=dict(color='rgba(59, 130, 246, 0)'),
+            name='Vùng không bác bỏ',
+            showlegend=True
+        ))
+        
+        fig.add_vline(x=z_critical, line_dash='dash', line_color='#ef4444', line_width=2,
+                     annotation_text=f'Critical Z = {z_critical:.2f}', annotation_position='top',
+                     annotation_font_color='#f3f4f6')
+        
+        marker_color = '#ef4444' if z_stat > z_critical else '#10b981'
+        marker_symbol = 'x' if z_stat > z_critical else 'circle'
+        
+        fig.add_trace(go.Scatter(
+            x=[z_stat],
+            y=[stats.norm.pdf(z_stat, 0, 1)],
+            mode='markers+text',
+            marker=dict(color=marker_color, size=12, symbol=marker_symbol, line=dict(width=2, color='white')),
+            name=f'Z = {z_stat:.2f}',
+            text=[f'{z_stat:.2f}'],
+            textposition='top center',
+            textfont_color='#f3f4f6',
+            showlegend=True
+        ))
+        
+        conclusion = "Bác bỏ H₀" if z_stat > z_critical else "Không bác bỏ H₀"
+        conclusion_color = '#ef4444' if z_stat > z_critical else '#10b981'
+        
+        fig.add_annotation(
+            x=0, y=0.3,
+            text=f"Kết luận: {conclusion}",
+            font=dict(color=conclusion_color, size=12, weight='bold'),
+            bgcolor='#1f2937',
+            bordercolor=conclusion_color,
+            borderwidth=2,
+            showarrow=False
+        )
+    else:
+        z_critical_lower = stats.norm.ppf(alpha / 2)
+        z_critical_upper = stats.norm.ppf(1 - alpha / 2)
+        
+        x_reject_r = np.linspace(z_critical_upper, 4, 100)
+        y_reject_r = stats.norm.pdf(x_reject_r, 0, 1)
+        fig.add_trace(go.Scatter(
+            x=np.concatenate([x_reject_r, x_reject_r[::-1]]),
+            y=np.concatenate([y_reject_r, np.zeros_like(y_reject_r)]),
+            fill='toself',
+            fillcolor='rgba(239, 68, 68, 0.5)',
+            line=dict(color='rgba(239, 68, 68, 0)'),
+            name='Vùng bác bỏ H₀',
+            showlegend=True
+        ))
+        
+        x_reject_l = np.linspace(-4, z_critical_lower, 100)
+        y_reject_l = stats.norm.pdf(x_reject_l, 0, 1)
+        fig.add_trace(go.Scatter(
+            x=np.concatenate([x_reject_l, x_reject_l[::-1]]),
+            y=np.concatenate([y_reject_l, np.zeros_like(y_reject_l)]),
+            fill='toself',
+            fillcolor='rgba(239, 68, 68, 0.5)',
+            line=dict(color='rgba(239, 68, 68, 0)'),
+            showlegend=False
+        ))
+        
+        fig.add_vline(x=z_critical_upper, line_dash='dash', line_color='#ef4444',
+                     annotation_text=f'+{z_critical_upper:.2f}', annotation_position='top',
+                     annotation_font_color='#f3f4f6')
+        fig.add_vline(x=z_critical_lower, line_dash='dash', line_color='#ef4444',
+                     annotation_text=f'{z_critical_lower:.2f}', annotation_position='top',
+                     annotation_font_color='#f3f4f6')
+        
+        fig.add_trace(go.Scatter(
+            x=[z_stat],
+            y=[stats.norm.pdf(z_stat, 0, 1)],
+            mode='markers+text',
+            marker=dict(color='#ef4444' if abs(z_stat) > z_critical_upper else '#10b981', 
+                       size=12, symbol='x' if abs(z_stat) > z_critical_upper else 'circle'),
+            name=f'Z = {z_stat:.2f}',
+            text=[f'{z_stat:.2f}'],
+            textposition='top center',
+            textfont_color='#f3f4f6'
+        ))
+    
+    fig.update_layout(
+        title=f'Biểu Đồ Vùng Bác Bỏ (α = {alpha})',
+        title_font_color='#f3f4f6',
+        xaxis_title='Giá trị Z',
+        yaxis_title='Mật độ xác suất',
+        height=500,
+        showlegend=True,
+        hovermode='x unified',
+        plot_bgcolor='#111827',
+        paper_bgcolor='#111827',
+        font_color='#f3f4f6',
+        xaxis=dict(gridcolor='#374151', zerolinecolor='#6b7280'),
+        yaxis=dict(gridcolor='#374151', zerolinecolor='#6b7280')
+    )
+    
+    fig.add_annotation(
+        x=-3.5, y=0.05,
+        text="🔴 Vùng bác bỏ (α)<br>🔵 Vùng không bác bỏ (1-α)",
+        showarrow=False,
+        bgcolor='#1f2937',
+        bordercolor='#6b7280',
+        borderwidth=1,
+        align='left',
+        font_color='#f3f4f6'
+    )
+    
+    return fig
+
 
 # ============================================================================
 # SIDEBAR
@@ -88,7 +330,7 @@ with st.sidebar:
     
     option = st.radio(
         "Chọn chức năng",
-        ["Tải Dataset", "Nhập Dữ Liệu", "Phân Tích", "Kết Quả"],
+        ["Tải Dataset", "Nhập Dữ Liệu", "Phương Pháp & Kết Quả", "Kết Quả"],
         label_visibility="collapsed"
     )
     
@@ -105,8 +347,8 @@ with st.sidebar:
 # ============================================================================
 st.markdown("""
 <div style="text-align: center; margin-bottom: 2rem;">
-    <h1 style="margin-bottom: 0.5rem;">Phân Tích Thu Nhập Theo Giới Tính</h1>
-    <p style="color: #666; margin-top: 0;">Nghiên cứu sự khác biệt về thu nhập giữa nam và nữ</p>
+    <h1 style="margin-bottom: 0.5rem; color: #f3f4f6;">Phân Tích Thu Nhập Theo Giới Tính</h1>
+    <p style="color: #9ca3af; margin-top: 0;">Nghiên cứu sự khác biệt về thu nhập giữa nam và nữ</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -131,22 +373,24 @@ if option == "Tải Dataset":
             try:
                 df = pd.read_csv(uploaded_file, na_values=['?', ' ?', ''])
                 analyzer.load_from_dataframe(df)
-                analyzer.clean_data()
                 
-                st.success(f"Đã tải thành công {len(df):,} dòng dữ liệu")
-                
-                # Preview data
-                st.markdown("#### Xem Trước Dữ Liệu")
-                st.dataframe(df.head(10), use_container_width=True)
-                
-                # Data info
-                col_a, col_b, col_c = st.columns(3)
-                with col_a:
-                    st.metric("Số hàng", f"{df.shape[0]:,}")
-                with col_b:
-                    st.metric("Số cột", df.shape[1])
-                with col_c:
-                    st.metric("Missing Values", df.isnull().sum().sum())
+                # Clean data ngay sau khi load
+                if analyzer.clean_data():
+                    st.session_state.data_loaded = True
+                    st.success(f"Đã tải và xử lý thành công {len(df):,} dòng dữ liệu")
+                    
+                    st.markdown("#### Xem Trước Dữ Liệu")
+                    st.dataframe(df.head(10), use_container_width=True)
+                    
+                    col_a, col_b, col_c = st.columns(3)
+                    with col_a:
+                        st.metric("Số hàng", f"{df.shape[0]:,}")
+                    with col_b:
+                        st.metric("Số cột", df.shape[1])
+                    with col_c:
+                        st.metric("Missing Values", df.isnull().sum().sum())
+                else:
+                    st.error("Không thể làm sạch dữ liệu. Kiểm tra file CSV.")
                 
             except Exception as e:
                 st.error(f"Lỗi: {str(e)}")
@@ -173,6 +417,7 @@ if option == "Tải Dataset":
             
             analyzer.load_from_dataframe(df)
             analyzer.clean_data()
+            st.session_state.data_loaded = True
             st.success("Đã tải dữ liệu mẫu")
             st.rerun()
         
@@ -181,7 +426,7 @@ if option == "Tải Dataset":
         st.markdown("""
         1. Tải file adult.csv từ Kaggle
         2. Hoặc dùng dữ liệu mẫu để test
-        3. Chuyển sang tab Phân Tích để tiếp tục
+        3. Chuyển sang tab Phương Pháp & Kết Quả để tiếp tục
         """)
 
 # ============================================================================
@@ -191,7 +436,6 @@ elif option == "Nhập Dữ Liệu":
     st.markdown("### Nhập Dữ Liệu Thủ Công")
     st.markdown("Thêm từng quan sát vào dataset")
     
-    # Input form
     with st.container():
         col1, col2, col3 = st.columns(3)
         
@@ -215,13 +459,13 @@ elif option == "Nhập Dữ Liệu":
                     analyzer.df = pd.concat([analyzer.df, new_row], ignore_index=True)
                 
                 analyzer.clean_data()
+                st.session_state.data_loaded = len(analyzer.df) > 0
                 st.success(f"Đã thêm! Tổng: {len(analyzer.df)} dòng")
                 st.rerun()
     
     st.markdown("---")
     
-    # Data preview
-    if analyzer.df is not None:
+    if analyzer.df is not None and len(analyzer.df) > 0:
         st.markdown("#### Dữ Liệu Đã Nhập")
         st.dataframe(analyzer.df, use_container_width=True)
         
@@ -230,30 +474,66 @@ elif option == "Nhập Dữ Liệu":
             if st.button("Xóa Tất Cả", use_container_width=True):
                 analyzer.df = None
                 analyzer.df_clean = None
+                st.session_state.data_loaded = False
+                st.session_state.analysis_done = False
                 st.rerun()
         with col2:
-            if st.button("Chuyển Sang Phân Tích", use_container_width=True):
-                st.session_state.analysis_done = True
-                st.rerun()
+            if st.button("Lưu", use_container_width=True):
+                if analyzer.clean_data():
+                    st.session_state.data_loaded = True
+                    st.session_state.analysis_done = True
+                    st.success("Đã lưu dữ liệu thành công")
+                    st.rerun()
+                else:
+                    st.error("Không thể lưu. Dữ liệu không hợp lệ.")
     else:
         st.info("Chưa có dữ liệu. Vui lòng thêm dòng hoặc tải dataset.")
 
 # ============================================================================
-# TAB 3: PHÂN TÍCH
+# TAB 3: PHƯƠNG PHÁP & KẾT QUẢ
 # ============================================================================
-elif option == "Phân Tích":
-    if analyzer.df_clean is None:
+elif option == "Phương Pháp & Kết Quả":
+    # Kiểm tra dữ liệu đã được load chưa
+    if not st.session_state.get('data_loaded', False) or analyzer.df_clean is None or len(analyzer.df_clean) == 0:
         st.warning("Vui lòng tải dữ liệu ở tab Tải Dataset trước")
         st.stop()
     
     # Chạy phân tích
     stats_desc = analyzer.get_descriptive_stats()
+    
+    # Kiểm tra nếu không có dữ liệu hợp lệ
+    if stats_desc['n_male'] == 0 or stats_desc['n_female'] == 0:
+        st.error("Dữ liệu không đủ cả 2 giới tính để phân tích")
+        st.stop()
+    
     results = analyzer.run_z_test()
-    t_results = analyzer.run_t_test()
     assumptions = analyzer.check_assumptions()
     power = analyzer.calculate_power()
     
     st.session_state.analysis_done = True
+    
+    # === SECTION 0: TÓM TẮT PHƯƠNG PHÁP ===
+    st.markdown("### Phương Pháp Phân Tích")
+    
+    with st.container():
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("**Giả thuyết kiểm định:**")
+            st.markdown("""
+            - **H₀:** pₘ = pբ (Tỷ lệ thu nhập >50K của nam bằng nữ)
+            - **H₁:** pₘ > pբ (Tỷ lệ thu nhập >50K của nam cao hơn nữ)
+            - **Mức ý nghĩa:** α = 0.05
+            """)
+        
+        with col2:
+            st.markdown("**Công thức Z-test:**")
+            st.latex(r"""
+            z = \frac{\hat{p}_1 - \hat{p}_2}{\sqrt{\hat{p}(1-\hat{p})(\frac{1}{n_1} + \frac{1}{n_2})}}
+            """)
+            st.markdown("Trong đó: p̂ = (x₁ + x₂) / (n₁ + n₂)")
+    
+    st.markdown("---")
     
     # === SECTION 1: TỔNG QUAN ===
     st.markdown("### Tổng Quan Mẫu")
@@ -270,77 +550,58 @@ elif option == "Phân Tích":
     
     st.markdown("---")
     
-    # === SECTION 2: BIỂU ĐỒ ===
-    st.markdown("### Trực Quan Hóa")
+    # === SECTION 2: BIỂU ĐỒ THỐNG KÊ ===
+    st.markdown("### Trực Quan Hóa Kiểm Định")
     
-    tab1, tab2, tab3 = st.tabs(["Biểu Đồ Cột", "Biểu Đồ Tròn", "Heatmap"])
+    tab1, tab2 = st.tabs(["Phân Phối Chuẩn", "Vùng Bác Bỏ"])
     
     with tab1:
-        fig = go.Figure()
-        fig.add_trace(go.Bar(
-            x=['Nam', 'Nữ'],
-            y=[stats_desc['p_male']*100, stats_desc['p_female']*100],
-            marker_color=['#2563eb', '#dc2626'],
-            text=[f'{stats_desc["p_male"]*100:.1f}%', f'{stats_desc["p_female"]*100:.1f}%'],
-            textposition='outside'
-        ))
-        fig.update_layout(
-            title='Tỷ lệ thu nhập trên 50K theo giới tính',
-            xaxis_title='Giới tính',
-            yaxis_title='Tỷ lệ (%)',
-            yaxis_range=[0, 40],
-            height=400,
-            showlegend=False
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        st.markdown("#### Biểu Đồ Phân Phối Chuẩn")
+        st.markdown("Hiển thị vị trí Z-statistic trên đường cong phân phối chuẩn N(0,1)")
+        
+        z_stat = results.get('z_statistic', 0)
+        p_value = results.get('p_value_one_tail', 1)
+        
+        fig_normal = plot_normal_distribution(z_stat, p_value, test_type='one-tailed')
+        st.plotly_chart(fig_normal, use_container_width=True)
+        
+        with st.expander("Giải thích biểu đồ"):
+            st.markdown("""
+            **Đường cong xám:** Phân phối chuẩn chuẩn hóa N(0,1)
+            
+            **Vùng đỏ:** Diện tích tương ứng với p-value
+            
+            **Đường nét đứt đỏ:** Vị trí Z-statistic quan sát được
+            
+            **Đường chấm xanh:** Critical value tại α = 0.05
+            """)
     
     with tab2:
-        col1, col2 = st.columns(2)
-        with col1:
-            fig = px.pie(
-                values=[stats_desc['x_male'], stats_desc['n_male']-stats_desc['x_male']],
-                names=['>50K', '<=50K'],
-                title=f'Nam (n={stats_desc["n_male"]:,})',
-                color_discrete_sequence=['#16a34a', '#9ca3af'],
-                hole=0.3
-            )
-            fig.update_layout(height=350)
-            st.plotly_chart(fig, use_container_width=True)
-        with col2:
-            fig = px.pie(
-                values=[stats_desc['x_female'], stats_desc['n_female']-stats_desc['x_female']],
-                names=['>50K', '<=50K'],
-                title=f'Nữ (n={stats_desc["n_female"]:,})',
-                color_discrete_sequence=['#16a34a', '#9ca3af'],
-                hole=0.3
-            )
-            fig.update_layout(height=350)
-            st.plotly_chart(fig, use_container_width=True)
-    
-    with tab3:
-        if 'age' in analyzer.df_clean.columns:
-            df = analyzer.df_clean.copy()
-            df['age_group'] = pd.cut(df['age'], bins=[0,30,45,60,100], labels=['<30','30-45','45-60','60+'])
-            pivot = pd.crosstab([df['age_group'], df['sex']], df['income_binary'], normalize='index') * 100
+        st.markdown("#### Biểu Đồ Vùng Bác Bỏ")
+        st.markdown("Hiển thị vùng quyết định bác bỏ hoặc không bác bỏ giả thuyết H₀")
+        
+        alpha = 0.05
+        fig_critical = plot_critical_region(z_stat, alpha=alpha, test_type='one-tailed')
+        st.plotly_chart(fig_critical, use_container_width=True)
+        
+        with st.expander("Giải thích biểu đồ"):
+            st.markdown(f"""
+            **Mức ý nghĩa α:** {alpha} ({alpha*100}%)
             
-            if 1 in pivot.columns:
-                fig = px.imshow(
-                    pivot[1].unstack(),
-                    text_auto='.1f',
-                    color_continuous_scale='YlOrRd',
-                    labels={'color': 'Tỷ lệ (%)'}
-                )
-                fig.update_layout(title='Tỷ lệ thu nhập >50K theo tuổi và giới tính', height=400)
-                st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("Dữ liệu không có cột tuổi")
+            **Vùng đỏ:** Vùng bác bỏ H₀
+            
+            **Vùng xanh:** Vùng không bác bỏ H₀
+            
+            **Critical Z:** {stats.norm.ppf(1-alpha):.2f}
+            
+            **Z-observed:** {z_stat:.2f}
+            """)
     
     st.markdown("---")
     
-    # === SECTION 3: KIỂM ĐỊNH THỐNG KÊ ===
+    # === SECTION 3: KẾT QUẢ KIỂM ĐỊNH ===
     st.markdown("### Kết Quả Kiểm Định")
     
-    # Metrics hàng 1
     col1, col2, col3, col4 = st.columns(4)
     
     p_value_display = analyzer.format_p_value(results['p_value_one_tail'])
@@ -355,7 +616,6 @@ elif option == "Phân Tích":
     with col4:
         st.metric("Effect Size (h)", f"{results.get('cohens_h', 0):.4f}")
     
-    # Kết luận
     st.markdown("#### Kết Luận")
     
     if results['reject_h0']:
@@ -377,7 +637,6 @@ elif option == "Phân Tích":
             f"Không đủ bằng chứng thống kê để kết luận có sự khác biệt về thu nhập giữa nam và nữ."
         )
     
-    # Điều kiện kiểm định
     st.markdown("#### Điều Kiện Kiểm Định")
     
     with st.container():
@@ -403,7 +662,6 @@ elif option == "Phân Tích":
             large = "Đạt" if assumptions['large_sample'] else "Không đạt"
             st.write(f"**Mẫu lớn (n>30):** {large}")
     
-    # Giải thích p-value
     with st.expander("Giải thích về P-value"):
         st.markdown("""
         **P-value hiển thị bằng 0 có nghĩa là gì?**
@@ -413,20 +671,61 @@ elif option == "Phân Tích":
         - Chênh lệch giữa 2 nhóm rõ rệt
         - Z-statistic rất cao
         
-        Python hiển thị làm tròn thành 0, nhưng ý nghĩa thống kê là rất mạnh.
-        
         **Cách diễn giải:**
         - p < 0.05: Có ý nghĩa thống kê
         - p < 0.01: Rất có ý nghĩa
         - p < 0.001: Cực kỳ có ý nghĩa
+        """)
+    
+    st.markdown("---")
+    
+    # === SECTION 4: CÁCH RA KẾT QUẢ ===
+    st.markdown("### Cách Ra Kết Quả")
+    
+    with st.container():
+        st.markdown("""
+        **Quy trình kiểm định:**
+        
+        1. **Tính Z-statistic** từ dữ liệu mẫu
+        2. **Tính P-value** = P(Z > Z-observed) từ phân phối chuẩn
+        3. **So sánh P-value với α:**
+           - Nếu P-value < α (0.05) → Bác bỏ H₀
+           - Nếu P-value ≥ α (0.05) → Không bác bỏ H₀
+        4. **Kết luận:** Dựa trên quyết định bác bỏ/không bác bỏ H₀
+        
+        **Hoặc so sánh Z-statistic với Critical Value:**
+        
+        - Critical Z (α = 0.05, one-tailed) = 1.645
+        - Nếu Z-observed > 1.645 → Bác bỏ H₀
+        - Nếu Z-observed ≤ 1.645 → Không bác bỏ H₀
+        """)
+        
+        z_stat = results.get('z_statistic', 0)
+        z_critical = 1.645
+        reject = z_stat > z_critical
+        
+        st.info(f"""
+        **Áp dụng vào dữ liệu hiện tại:**
+        
+        - Z-observed = {z_stat:.4f}
+        - Critical Z = {z_critical:.2f}
+        - P-value = {analyzer.format_p_value(results.get('p_value_one_tail', 0))}
+        
+        → **Kết luận:** {'Bác bỏ H₀' if reject else 'Không bác bỏ H₀'}
         """)
 
 # ============================================================================
 # TAB 4: KẾT QUẢ
 # ============================================================================
 elif option == "Kết Quả":
-    if not st.session_state.analysis_done:
-        st.warning("Vui lòng thực hiện phân tích ở tab Phân Tích trước")
+    if not st.session_state.get('analysis_done', False):
+        st.warning("Vui lòng thực hiện phân tích ở tab Phương Pháp & Kết Quả trước")
+        st.stop()
+    
+    # Kiểm tra dữ liệu
+    stats_desc = analyzer.get_descriptive_stats()
+    if stats_desc['n_male'] == 0 and stats_desc['n_female'] == 0:
+        st.warning("Không có dữ liệu để hiển thị kết quả")
         st.stop()
     
     st.markdown("### Bảng Kết Quả Tổng Hợp")
@@ -436,7 +735,6 @@ elif option == "Kết Quả":
     
     st.markdown("---")
     
-    # Download buttons
     st.markdown("### Xuất Dữ Liệu")
     
     col1, col2 = st.columns(2)
@@ -452,7 +750,7 @@ elif option == "Kết Quả":
         )
     
     with col2:
-        if analyzer.df_clean is not None:
+        if analyzer.df_clean is not None and len(analyzer.df_clean) > 0:
             csv_full = analyzer.df_clean.to_csv(index=False, encoding='utf-8-sig')
             st.download_button(
                 label="Tải Dữ Liệu Đã Làm Sạch (CSV)",
@@ -464,7 +762,6 @@ elif option == "Kết Quả":
     
     st.markdown("---")
     
-    # Phương pháp
     st.markdown("### Phương Pháp Phân Tích")
     
     with st.container():
@@ -496,7 +793,7 @@ elif option == "Kết Quả":
 # ============================================================================
 st.markdown("---")
 st.markdown(
-    "<div style='text-align: center; color: #666; font-size: 0.85rem; padding: 1rem;'>"
+    "<div style='text-align: center; color: #6b7280; font-size: 0.85rem; padding: 1rem;'>"
     "Adult Income Analysis - Chương 3 & 4 Thống kê<br>"
     "Phương pháp: Two-Proportion Z-Test, Welch's T-Test, Power Analysis"
     "</div>",
