@@ -13,7 +13,7 @@ warnings.filterwarnings('ignore')
 class IncomeAnalyzer:
     """
     Phân tích và kiểm định sự khác biệt thu nhập theo giới tính
-    Phương pháp: Two-Proportion Z-Test (phù hợp với income categorical)
+    Phương pháp: Two-Proportion Z-Test
     """
     
     def __init__(self):
@@ -85,7 +85,7 @@ class IncomeAnalyzer:
         return len(self.df_clean) > 0
     
     # ========================================================================
-    # 2. THỐNG KÊ MÔ TẢ (PHẦN "PHÂN TÍCH" TRONG ĐỀ BÀI)
+    # 2. THỐNG KÊ MÔ TẢ
     # ========================================================================
     def get_descriptive_stats(self) -> Dict:
         """Thống kê mô tả thu nhập theo giới tính"""
@@ -107,11 +107,11 @@ class IncomeAnalyzer:
         }
     
     # ========================================================================
-    # 3. KIỂM ĐỊNH THỐNG KÊ (PHẦN "KIỂM ĐỊNH" TRONG ĐỀ BÀI)
+    # 3. KIỂM ĐỊNH THỐNG KÊ (ĐÃ LOẠI BỎ ODDS RATIO & COHEN'S H)
     # ========================================================================
     def run_z_test(self) -> Dict:
         """
-        Two-Proportion Z-Test - Phương pháp chính
+        Two-Proportion Z-Test
         Áp dụng: Chương 3.5, 4.6
         """
         stats_desc = self.get_descriptive_stats()
@@ -152,19 +152,6 @@ class IncomeAnalyzer:
         ci_lower = (p_male - p_female) - 1.96 * se_diff
         ci_upper = (p_male - p_female) + 1.96 * se_diff
         
-        # Effect Size - Cohen's h
-        p_male_safe = np.clip(p_male, 0.0001, 0.9999)
-        p_female_safe = np.clip(p_female, 0.0001, 0.9999)
-        cohens_h = 2 * (np.arcsin(np.sqrt(p_male_safe)) - np.arcsin(np.sqrt(p_female_safe)))
-        
-        # Odds Ratio
-        if p_male < 1 and p_female > 0:
-            odds_male = p_male / (1 - p_male)
-            odds_female = p_female / (1 - p_female)
-            odds_ratio = odds_male / odds_female if odds_female > 0 else np.inf
-        else:
-            odds_ratio = np.inf
-        
         # Kết luận
         alpha = 0.05
         reject_h0 = p_value_one_tail < alpha
@@ -175,8 +162,6 @@ class IncomeAnalyzer:
             'p_value_two_tail': float(p_value_two_tail),
             'ci_lower_95': float(ci_lower),
             'ci_upper_95': float(ci_upper),
-            'cohens_h': float(cohens_h),
-            'odds_ratio': float(odds_ratio) if odds_ratio != np.inf else np.inf,
             'reject_h0': bool(reject_h0),
             'alpha': float(alpha),
             'se_pooled': float(se_pooled),
@@ -239,7 +224,7 @@ class IncomeAnalyzer:
         }
     
     # ========================================================================
-    # 6. EXPORT KẾT QUẢ
+    # 6. EXPORT KẾT QUẢ (ĐÃ LOẠI BỎ ODDS RATIO & COHEN'S H)
     # ========================================================================
     def get_results_table(self) -> pd.DataFrame:
         """Xuất bảng kết quả tổng hợp"""
@@ -257,9 +242,6 @@ class IncomeAnalyzer:
         p_value_formatted = self.format_p_value(self.results.get('p_value_one_tail', 0))
         p_value_scientific = self.format_scientific(self.results.get('p_value_one_tail', 0))
         
-        or_val = self.results.get('odds_ratio', 0)
-        or_formatted = f"{or_val:.4f}" if or_val != np.inf else "> 999"
-        
         return pd.DataFrame({
             'Chỉ số': [
                 'Kích thước mẫu (Nam)',
@@ -270,8 +252,6 @@ class IncomeAnalyzer:
                 'Z-statistic',
                 'P-value',
                 'Khoảng tin cậy 95%',
-                "Cohen's h",
-                'Odds Ratio',
                 'Kết luận'
             ],
             'Giá trị': [
@@ -283,8 +263,6 @@ class IncomeAnalyzer:
                 f"{self.results.get('z_statistic', 0):.4f}",
                 p_value_formatted,
                 f"[{self.results.get('ci_lower_95', 0)*100:.2f}%, {self.results.get('ci_upper_95', 0)*100:.2f}%]",
-                f"{self.results.get('cohens_h', 0):.4f}",
-                or_formatted,
                 "Bác bỏ H₀" if self.results.get('reject_h0', False) else "Không bác bỏ H₀"
             ]
         })
@@ -344,31 +322,21 @@ if __name__ == "__main__":
         if analyzer.clean_data():
             print("✓ Cleaned data")
             
-            # Descriptive stats
             stats_desc = analyzer.get_descriptive_stats()
             print(f"\n=== THỐNG KÊ MÔ TẢ ===")
             print(f"Năm: {stats_desc['n_male']:,} ({stats_desc['p_male']*100:.2f}%)")
             print(f"Nữ: {stats_desc['n_female']:,} ({stats_desc['p_female']*100:.2f}%)")
             
-            # Z-test
             results = analyzer.run_z_test()
             print(f"\n=== KIỂM ĐỊNH Z-TEST ===")
             print(f"Z-statistic: {results['z_statistic']:.4f}")
             print(f"P-value: {analyzer.format_p_value(results['p_value_one_tail'])}")
             print(f"Kết luận: {'Bác bỏ H₀' if results['reject_h0'] else 'Không bác bỏ H₀'}")
             
-            # Assumptions
             assumptions = analyzer.check_assumptions()
             print(f"\n=== ĐIỀU KIỆN ===")
             print(f"Z-test valid: {assumptions['z_test_valid']}")
-            print(f"Large sample: {assumptions['large_sample']}")
             
-            # Power
-            power = analyzer.calculate_power()
-            print(f"\n=== POWER ===")
-            print(f"Power: {power['power']*100:.2f}%")
-            
-            # Save
             analyzer.save_results('ket_qua_phan_tich.csv')
             print("\n✓ Đã lưu kết quả!")
         else:
